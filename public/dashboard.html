@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="TaskBoard Dashboard - Manage boards and track tasks">
+  <title>Dashboard – TaskBoard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <div class="app-layout">
+    <!-- Persistent Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">T</div>
+        <div class="brand-title">TaskBoard</div>
+        <span class="brand-badge">Kanban</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+
+        <div class="nav-section-title">Recent Boards</div>
+        <div class="sidebar-recent-boards" id="recent-boards-list">
+          <!-- Populated dynamically via JS -->
+          <div style="padding: 8px 12px; font-size: 12px; color: var(--sidebar-text-muted);">Loading boards...</div>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button type="button" class="theme-toggle-btn" title="Toggle dark/light theme">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <span>Theme</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Top Navigation -->
+      <header class="top-nav">
+        <div class="nav-left">
+          <h1 class="page-title">Dashboard</h1>
+          <div class="nav-search">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="board-search-input" class="search-input" placeholder="Search boards...">
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <button type="button" id="open-create-board-btn" class="btn btn-primary btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>New Board</span>
+          </button>
+
+          <!-- User Menu -->
+          <div class="user-menu-container">
+            <button type="button" class="user-avatar-btn" id="user-menu-btn" title="Account Menu">
+              <div class="avatar user-avatar-initials">--</div>
+              <span class="user-name-label user-display-name">Loading...</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+
+            <div class="user-dropdown" id="user-dropdown">
+              <div class="dropdown-header">
+                <div class="dropdown-user-name user-display-name">--</div>
+                <div class="dropdown-user-email user-display-email">--</div>
+              </div>
+              <button type="button" class="dropdown-item danger" id="logout-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Log Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Dashboard Content -->
+      <main class="content-container">
+        <!-- Hero Welcome -->
+        <div class="dashboard-hero">
+          <div class="hero-welcome">
+            <h1>Welcome back, <span id="welcome-name">Developer</span>! 👋</h1>
+            <p>Track your team's projects, manage task workflows, and collaborate in real time.</p>
+          </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue">📋</div>
+            <div class="stat-info">
+              <div class="stat-value" id="stat-boards-count">0</div>
+              <div class="stat-label">Accessible Boards</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon green">⚡</div>
+            <div class="stat-info">
+              <div class="stat-value" id="stat-tasks-count">0</div>
+              <div class="stat-label">Total Active Tasks</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon amber">👥</div>
+            <div class="stat-info">
+              <div class="stat-value" id="stat-members-count">0</div>
+              <div class="stat-label">Collaborators</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Boards List Section -->
+        <div class="boards-section-header">
+          <h2 class="section-heading">Your Workspaces</h2>
+          <span style="font-size: 12px; color: var(--text-muted);" id="boards-count-label">Loading...</span>
+        </div>
+
+        <div class="boards-grid" id="boards-grid">
+          <!-- Loaded dynamically -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="boards-empty-state" style="display: none; text-align: center; padding: 60px 20px; background-color: var(--bg-surface); border: 1px dashed var(--border-strong); border-radius: var(--radius-lg);">
+          <div style="font-size: 44px; margin-bottom: 12px;">📌</div>
+          <h3 style="font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 6px;">No boards found</h3>
+          <p style="font-size: 13px; color: var(--text-muted); max-width: 400px; margin: 0 auto 20px;">
+            You haven't created or been added to any boards yet. Create your first Kanban board to get started.
+          </p>
+          <button type="button" class="btn btn-primary" onclick="openCreateBoardModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Create Board</span>
+          </button>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Create Board Modal -->
+  <div class="modal-overlay" id="create-board-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Create New Board</h3>
+        <button type="button" class="modal-close-btn" onclick="closeCreateBoardModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="create-board-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-board-name" class="form-label">Board Name *</label>
+            <input type="text" id="new-board-name" class="form-input" placeholder="e.g. Q4 Sprint or Marketing Launch" required maxlength="80">
+          </div>
+          <div class="form-group">
+            <label for="new-board-desc" class="form-label">Description (Optional)</label>
+            <textarea id="new-board-desc" class="form-textarea" placeholder="Briefly describe the purpose of this board..."></textarea>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted); background: var(--bg-secondary); padding: 10px 12px; border-radius: var(--radius-sm);">
+            ℹ️ Default columns (<strong>To Do</strong>, <strong>In Progress</strong>, <strong>Done</strong>) will be created automatically.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeCreateBoardModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="create-board-submit-btn">Create Board</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Rename Board Modal -->
+  <div class="modal-overlay" id="edit-board-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Board</h3>
+        <button type="button" class="modal-close-btn" onclick="closeEditBoardModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="edit-board-form">
+        <input type="hidden" id="edit-board-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="edit-board-name" class="form-label">Board Name *</label>
+            <input type="text" id="edit-board-name" class="form-input" required maxlength="80">
+          </div>
+          <div class="form-group">
+            <label for="edit-board-desc" class="form-label">Description</label>
+            <textarea id="edit-board-desc" class="form-textarea"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeEditBoardModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Board Confirmation Modal -->
+  <div class="modal-overlay" id="delete-board-modal">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--danger);">Delete Board</h3>
+        <button type="button" class="modal-close-btn" onclick="closeDeleteBoardModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="delete-board-id">
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+          Are you sure you want to permanently delete board <strong id="delete-board-title-label"></strong>? All columns, tasks, and comments will be permanently erased. This action cannot be undone.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeDeleteBoardModal()">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirm-delete-board-btn">Delete Board</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

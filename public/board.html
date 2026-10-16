@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="TaskBoard Kanban View - Agile project management and collaboration">
+  <title>Board – TaskBoard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <div class="app-layout">
+    <!-- Persistent Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">T</div>
+        <div class="brand-title">TaskBoard</div>
+        <span class="brand-badge">Kanban</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="dashboard.html" class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+
+        <div class="nav-section-title">Current Board</div>
+        <div style="padding: 6px 12px; font-size: 13px; font-weight: 600; color: #ffffff;" id="sidebar-current-board-name">Loading...</div>
+
+        <div class="nav-section-title">Recent Boards</div>
+        <div class="sidebar-recent-boards" id="sidebar-recent-boards">
+          <!-- Populated dynamically -->
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button type="button" class="theme-toggle-btn" title="Toggle dark/light theme">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <span>Theme</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Board Wrapper -->
+    <div class="main-wrapper">
+      <!-- Top Navigation -->
+      <header class="top-nav">
+        <div class="nav-left">
+          <a href="dashboard.html" class="btn btn-secondary btn-sm" title="Back to Dashboard">
+            &larr; Boards
+          </a>
+          <h1 class="page-title" id="board-header-title">Loading Board...</h1>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-edit-board-title" title="Edit board name" style="display: none;">
+            ✏️
+          </button>
+        </div>
+
+        <div class="nav-right">
+          <!-- Member Avatars Stack -->
+          <div class="members-avatar-stack" id="board-members-stack" title="Manage board members" onclick="openMembersModal()">
+            <!-- Rendered via JS -->
+          </div>
+
+          <button type="button" class="btn btn-secondary btn-sm" onclick="openMembersModal()">
+            👥 Members
+          </button>
+
+          <button type="button" class="btn btn-secondary btn-sm" onclick="openActivityModal()" title="View Activity Log">
+            📜 Activity
+          </button>
+
+          <!-- User Menu -->
+          <div class="user-menu-container">
+            <button type="button" class="user-avatar-btn" id="user-menu-btn" title="Account Menu">
+              <div class="avatar user-avatar-initials">--</div>
+              <span class="user-name-label user-display-name">Loading...</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+
+            <div class="user-dropdown" id="user-dropdown">
+              <div class="dropdown-header">
+                <div class="dropdown-user-name user-display-name">--</div>
+                <div class="dropdown-user-email user-display-email">--</div>
+              </div>
+              <button type="button" class="dropdown-item danger" id="logout-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Log Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Board Toolbar (Search & Filters) -->
+      <section class="board-toolbar">
+        <div class="board-toolbar-left">
+          <!-- Search tasks -->
+          <div class="nav-search" style="width: 240px;">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="task-search-input" class="search-input" placeholder="Search tasks...">
+          </div>
+
+          <!-- Priority Filter -->
+          <select id="filter-priority" class="filter-select">
+            <option value="all">Priority: All</option>
+            <option value="high">High Priority</option>
+            <option value="medium">Medium Priority</option>
+            <option value="low">Low Priority</option>
+          </select>
+
+          <!-- Assignee Filter -->
+          <select id="filter-assignee" class="filter-select">
+            <option value="all">Assignee: All</option>
+            <option value="me">Assigned to Me</option>
+            <option value="unassigned">Unassigned</option>
+            <!-- Dynamically populated with board members -->
+          </select>
+
+          <!-- Quick My Tasks Toggle -->
+          <button type="button" id="btn-toggle-my-tasks" class="btn btn-secondary btn-sm" title="Toggle tasks assigned to me">
+            👤 My Tasks
+          </button>
+
+          <!-- Clear Filters -->
+          <button type="button" id="btn-clear-filters" class="btn btn-ghost btn-sm" style="display: none;" title="Reset filters">
+            ✕ Clear
+          </button>
+        </div>
+
+        <div class="board-toolbar-right">
+          <button type="button" class="btn btn-primary btn-sm" onclick="openAddColumnModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Add Column</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Kanban Canvas -->
+      <div class="kanban-view-container">
+        <div class="kanban-canvas" id="kanban-canvas">
+          <!-- Columns dynamically injected here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Detail / Edit Modal -->
+  <div class="modal-overlay" id="task-detail-modal">
+    <div class="modal-card large">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="detail-task-column-badge" style="font-size: 11px; background: var(--bg-secondary); padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); color: var(--text-secondary); font-weight: 600;">Column</span>
+          <span id="detail-task-id-badge" style="font-size: 11px; color: var(--text-muted);">#ID</span>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeTaskDetailModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <form id="task-detail-form" style="display: flex; flex-direction: column; gap: 16px;">
+          <input type="hidden" id="detail-task-id">
+
+          <div class="form-group">
+            <label for="detail-task-title" class="form-label">Task Title *</label>
+            <input type="text" id="detail-task-title" class="form-input" required maxlength="120">
+          </div>
+
+          <div class="form-group">
+            <label for="detail-task-desc" class="form-label">Description</label>
+            <textarea id="detail-task-desc" class="form-textarea" placeholder="Add detailed instructions, acceptance criteria, or links..." style="min-height: 90px;"></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="detail-task-priority" class="form-label">Priority</label>
+              <select id="detail-task-priority" class="form-select">
+                <option value="low">🟢 Low</option>
+                <option value="medium">🟡 Medium</option>
+                <option value="high">🔴 High</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="detail-task-due-date" class="form-label">Due Date</label>
+              <input type="date" id="detail-task-due-date" class="form-input">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="detail-task-assignee" class="form-label">Assignee (Board Members)</label>
+              <select id="detail-task-assignee" class="form-select">
+                <option value="">Unassigned</option>
+                <!-- Dynamically populated with board members -->
+              </select>
+            </div>
+
+            <!-- Accessible / Mobile Column Move Fallback -->
+            <div class="form-group">
+              <label for="detail-task-move-column" class="form-label">Move To Column (Accessible Fallback)</label>
+              <select id="detail-task-move-column" class="form-select">
+                <!-- Dynamically populated with columns -->
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); padding: 8px 0; border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
+            <div>Created by: <strong id="detail-task-creator">--</strong></div>
+            <div>Created: <span id="detail-task-created-at">--</span></div>
+          </div>
+        </form>
+
+        <!-- Comments Section -->
+        <div class="comments-container">
+          <h4 style="font-size: 13px; font-weight: 600; color: var(--text-main);">Comments (<span id="detail-comment-count">0</span>)</h4>
+
+          <div class="comments-list" id="detail-comments-list">
+            <!-- Dynamic comments -->
+          </div>
+
+          <form id="add-comment-form" style="display: flex; gap: 8px; margin-top: 6px;">
+            <input type="text" id="new-comment-input" class="form-input" placeholder="Write a comment..." style="flex: 1;" required>
+            <button type="submit" class="btn btn-secondary btn-sm" id="btn-post-comment">Post</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" class="btn btn-danger btn-sm" id="btn-delete-task-trigger">
+          🗑️ Delete Task
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-ghost" onclick="closeTaskDetailModal()">Close</button>
+          <button type="button" class="btn btn-primary" id="btn-save-task-changes">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Task Quick Modal -->
+  <div class="modal-overlay" id="create-task-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Create Task in <span id="create-task-col-name" style="color: var(--primary);">--</span></h3>
+        <button type="button" class="modal-close-btn" onclick="closeCreateTaskModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="create-task-form">
+        <input type="hidden" id="create-task-column-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="create-task-title" class="form-label">Task Title *</label>
+            <input type="text" id="create-task-title" class="form-input" placeholder="e.g. Implement OAuth Flow" required maxlength="120">
+          </div>
+          <div class="form-group">
+            <label for="create-task-desc" class="form-label">Description</label>
+            <textarea id="create-task-desc" class="form-textarea" placeholder="Add details or acceptance criteria..."></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="create-task-priority" class="form-label">Priority</label>
+              <select id="create-task-priority" class="form-select">
+                <option value="low">🟢 Low</option>
+                <option value="medium" selected>🟡 Medium</option>
+                <option value="high">🔴 High</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="create-task-due-date" class="form-label">Due Date</label>
+              <input type="date" id="create-task-due-date" class="form-input">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="create-task-assignee" class="form-label">Assignee</label>
+            <select id="create-task-assignee" class="form-select">
+              <option value="">Unassigned</option>
+              <!-- Populated with board members -->
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeCreateTaskModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-create-task">Create Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Column Modal -->
+  <div class="modal-overlay" id="add-column-modal">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Add New Column</h3>
+        <button type="button" class="modal-close-btn" onclick="closeAddColumnModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="add-column-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-column-name" class="form-label">Column Name *</label>
+            <input type="text" id="new-column-name" class="form-input" placeholder="e.g. QA Review or Blocked" required maxlength="40">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeAddColumnModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Column</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Rename Column Modal -->
+  <div class="modal-overlay" id="rename-column-modal">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Rename Column</h3>
+        <button type="button" class="modal-close-btn" onclick="closeRenameColumnModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="rename-column-form">
+        <input type="hidden" id="rename-column-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="rename-column-input" class="form-label">Column Name *</label>
+            <input type="text" id="rename-column-input" class="form-input" required maxlength="40">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeRenameColumnModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Rename</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Column Modal -->
+  <div class="modal-overlay" id="delete-column-modal">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--danger);">Delete Column</h3>
+        <button type="button" class="modal-close-btn" onclick="closeDeleteColumnModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="delete-column-id">
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;" id="delete-column-message">
+          Are you sure you want to delete this column?
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeDeleteColumnModal()">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirm-delete-column-btn">Delete Column</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Board Members Management Modal -->
+  <div class="modal-overlay" id="members-modal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Board Collaborators</h3>
+        <button type="button" class="modal-close-btn" onclick="closeMembersModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Invite Member Form (Owner only) -->
+        <div id="invite-member-section" style="padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+          <label class="form-label">Invite Registered User by Email</label>
+          <form id="invite-member-form" style="display: flex; gap: 8px; margin-top: 6px;">
+            <input type="email" id="invite-email-input" class="form-input" placeholder="e.g. sam@taskboard.local" required style="flex: 1;">
+            <button type="submit" class="btn btn-primary btn-sm" id="btn-invite-member">Invite</button>
+          </form>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            * The user must already have a registered TaskBoard account.
+          </div>
+        </div>
+
+        <!-- Members list -->
+        <div>
+          <label class="form-label" style="margin-bottom: 8px; display: block;">Current Members</label>
+          <div id="modal-members-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeMembersModal()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Log Modal -->
+  <div class="modal-overlay" id="activity-modal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Board Activity Log</h3>
+        <button type="button" class="modal-close-btn" onclick="closeActivityModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+        <div id="activity-log-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Populated via JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeActivityModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Task Confirmation Modal -->
+  <div class="modal-overlay" id="delete-task-modal">
+    <div class="modal-card" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--danger);">Delete Task</h3>
+        <button type="button" class="modal-close-btn" onclick="closeDeleteTaskModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+          Are you sure you want to delete this task? All comments on this task will also be removed. This action cannot be undone.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeDeleteTaskModal()">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirm-delete-task-btn">Delete Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename Board Modal -->
+  <div class="modal-overlay" id="rename-board-modal">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Rename Board</h3>
+        <button type="button" class="modal-close-btn" onclick="closeRenameBoardModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="rename-board-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="rename-board-input" class="form-label">Board Title *</label>
+            <input type="text" id="rename-board-input" class="form-input" required maxlength="80">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" onclick="closeRenameBoardModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Rename</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/board.js"></script>
+</body>
+</html>

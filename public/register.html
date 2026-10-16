@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Create a TaskBoard account - Kanban Project Management">
+  <title>Register – TaskBoard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="auth-page">
+
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-icon">T</div>
+      <div class="brand-title" style="color: var(--text-main);">TaskBoard</div>
+      <span class="brand-badge">Kanban</span>
+    </div>
+
+    <div class="auth-header">
+      <h1>Create your account</h1>
+      <p>Start organizing and managing your projects effortlessly</p>
+    </div>
+
+    <div id="auth-alert" style="display: none; padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; margin-bottom: 16px; background-color: var(--danger-light); color: var(--danger); border: 1px solid var(--danger-border);"></div>
+
+    <form id="register-form" class="auth-form" novalidate>
+      <div class="form-group">
+        <label for="name" class="form-label">Full Name</label>
+        <input type="text" id="name" class="form-input" placeholder="e.g. Alex Morgan" required autocomplete="name">
+      </div>
+
+      <div class="form-group">
+        <label for="email" class="form-label">Email Address</label>
+        <input type="email" id="email" class="form-input" placeholder="name@company.com" required autocomplete="email">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="password" class="form-label">Password</label>
+          <input type="password" id="password" class="form-input" placeholder="Min. 6 chars" required autocomplete="new-password">
+        </div>
+
+        <div class="form-group">
+          <label for="confirmPassword" class="form-label">Confirm Password</label>
+          <input type="password" id="confirmPassword" class="form-input" placeholder="Repeat password" required autocomplete="new-password">
+        </div>
+      </div>
+
+      <button type="submit" id="submit-btn" class="btn btn-primary" style="width: 100%; padding: 10px; margin-top: 8px;">
+        <span id="btn-text">Create Account</span>
+      </button>
+    </form>
+
+    <div class="auth-footer">
+      Already have an account? <a href="login.html">Sign in here</a>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    Auth.requireGuest();
+
+    const form = document.getElementById('register-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const btnText = document.getElementById('btn-text');
+    const alertBox = document.getElementById('auth-alert');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      alertBox.style.display = 'none';
+
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+
+      if (!name || !email || !password || !confirmPassword) {
+        alertBox.textContent = 'All fields are required.';
+        alertBox.style.display = 'block';
+        return;
+      }
+
+      if (password.length < 6) {
+        alertBox.textContent = 'Password must be at least 6 characters long.';
+        alertBox.style.display = 'block';
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        alertBox.textContent = 'Passwords do not match.';
+        alertBox.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      btnText.textContent = 'Creating account...';
+
+      try {
+        const data = await API.post('/api/auth/register', { name, email, password, confirmPassword });
+        Auth.setAuth(data.token, data.user);
+        showToast('Account created successfully!', 'success');
+        setTimeout(() => {
+          window.location.href = 'dashboard.html';
+        }, 400);
+      } catch (err) {
+        alertBox.textContent = err.message || 'Registration failed.';
+        alertBox.style.display = 'block';
+        submitBtn.disabled = false;
+        btnText.textContent = 'Create Account';
+      }
+    });
+  </script>
+</body>
+</html>

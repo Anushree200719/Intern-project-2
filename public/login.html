@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Log in to TaskBoard - Modern Kanban Task Management">
+  <title>Log In – TaskBoard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="auth-page">
+
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-icon">T</div>
+      <div class="brand-title" style="color: var(--text-main);">TaskBoard</div>
+      <span class="brand-badge">Kanban</span>
+    </div>
+
+    <div class="auth-header">
+      <h1>Welcome back</h1>
+      <p>Enter your credentials to access your workspaces</p>
+    </div>
+
+    <div id="auth-alert" style="display: none; padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; margin-bottom: 16px; background-color: var(--danger-light); color: var(--danger); border: 1px solid var(--danger-border);"></div>
+
+    <form id="login-form" class="auth-form" novalidate>
+      <div class="form-group">
+        <label for="email" class="form-label">Email Address</label>
+        <input type="email" id="email" class="form-input" placeholder="alex@taskboard.local" required autocomplete="email">
+      </div>
+
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <label for="password" class="form-label">Password</label>
+        </div>
+        <input type="password" id="password" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+
+      <button type="submit" id="submit-btn" class="btn btn-primary" style="width: 100%; padding: 10px;">
+        <span id="btn-text">Sign In</span>
+      </button>
+    </form>
+
+    <!-- Quick Demo Accounts for Viva Evaluation -->
+    <div class="demo-accounts-box">
+      <div class="demo-title">⚡ Quick Development Login (Viva Demo)</div>
+      <div class="demo-buttons-group">
+        <button type="button" class="demo-user-btn" onclick="fillDemo('alex@taskboard.local', 'password123')">
+          <span><strong>Alex Morgan</strong> (alex@taskboard.local)</span>
+          <span style="color: var(--primary); font-size: 10px;">Lead / Owner</span>
+        </button>
+        <button type="button" class="demo-user-btn" onclick="fillDemo('sam@taskboard.local', 'password123')">
+          <span><strong>Sam Taylor</strong> (sam@taskboard.local)</span>
+          <span style="color: var(--success); font-size: 10px;">Engineer</span>
+        </button>
+        <button type="button" class="demo-user-btn" onclick="fillDemo('jordan@taskboard.local', 'password123')">
+          <span><strong>Jordan Lee</strong> (jordan@taskboard.local)</span>
+          <span style="color: var(--warning); font-size: 10px;">UI/UX</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="auth-footer">
+      Don't have an account? <a href="register.html">Create an account</a>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    // Redirect if already logged in
+    Auth.requireGuest();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('expired')) {
+      const alertBox = document.getElementById('auth-alert');
+      alertBox.textContent = 'Your session has expired. Please log in again.';
+      alertBox.style.display = 'block';
+    }
+
+    function fillDemo(email, pass) {
+      document.getElementById('email').value = email;
+      document.getElementById('password').value = pass;
+    }
+
+    const form = document.getElementById('login-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const btnText = document.getElementById('btn-text');
+    const alertBox = document.getElementById('auth-alert');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      alertBox.style.display = 'none';
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) {
+        alertBox.textContent = 'Please provide both email and password.';
+        alertBox.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      btnText.textContent = 'Signing in...';
+
+      try {
+        const data = await API.post('/api/auth/login', { email, password });
+        Auth.setAuth(data.token, data.user);
+        showToast('Login successful! Welcome back.', 'success');
+        setTimeout(() => {
+          window.location.href = 'dashboard.html';
+        }, 400);
+      } catch (err) {
+        alertBox.textContent = err.message || 'Login failed. Please check your credentials.';
+        alertBox.style.display = 'block';
+        submitBtn.disabled = false;
+        btnText.textContent = 'Sign In';
+      }
+    });
+  </script>
+</body>
+</html>
