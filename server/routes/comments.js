@@ -8,11 +8,20 @@ router.use(authenticateToken);
 // POST /api/tasks/:taskId/comments - Add comment to task
 router.post('/task/:taskId', (req, res) => {
   try {
-    const taskId = Number(req.params.taskId);
+    const taskId = parseInt(req.params.taskId, 10);
+    if (!taskId || isNaN(taskId)) {
+      return res.status(400).json({ error: 'A valid Task ID is required.' });
+    }
+
     const { content } = req.body;
 
     if (!content || !content.trim()) {
       return res.status(400).json({ error: 'Comment content cannot be empty.' });
+    }
+
+    const trimmedContent = content.trim();
+    if (trimmedContent.length > 2000) {
+      return res.status(400).json({ error: 'Comment content cannot exceed 2000 characters.' });
     }
 
     // Verify task exists and user has board access
@@ -26,7 +35,6 @@ router.post('/task/:taskId', (req, res) => {
       return res.status(403).json({ error: 'Access denied. You are not a member of this board.' });
     }
 
-    const trimmedContent = content.trim();
     let newCommentId;
 
     const addCommentTx = db.transaction(() => {
@@ -72,7 +80,10 @@ router.post('/task/:taskId', (req, res) => {
 // DELETE /api/comments/:id - Delete comment (author only)
 router.delete('/:id', (req, res) => {
   try {
-    const commentId = Number(req.params.id);
+    const commentId = parseInt(req.params.id, 10);
+    if (!commentId || isNaN(commentId)) {
+      return res.status(400).json({ error: 'A valid Comment ID is required.' });
+    }
 
     const comment = db.prepare('SELECT id, task_id, user_id FROM comments WHERE id = ?').get(commentId);
     if (!comment) {

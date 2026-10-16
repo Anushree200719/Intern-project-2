@@ -3,6 +3,14 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// Ensure required security configuration is present
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim().length < 16) {
+  console.error('FATAL SECURITY CONFIGURATION: JWT_SECRET environment variable is missing or insecure (< 16 characters). Refusing to start.');
+  if (process.env.NODE_ENV !== 'test') {
+    process.exit(1);
+  }
+}
+
 // Ensure DB is initialized
 require('./db');
 

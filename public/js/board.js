@@ -227,19 +227,33 @@ function renderKanbanColumns() {
     // Filter tasks for this column
     const filteredTasks = (col.tasks || []).filter(task => matchFilter(task));
 
+    const isOwner = currentBoard.user_role === 'owner' || (currentUser && currentUser.id === currentBoard.owner_id);
+
     colEl.innerHTML = `
       <div class="column-header">
         <div class="column-header-left">
           <h2 class="column-title">${escapeHtml(col.name)}</h2>
           <span class="column-count-badge" id="col-count-${col.id}">${filteredTasks.length}</span>
         </div>
-        <div style="display: flex; gap: 4px;">
+        <div style="display: flex; align-items: center; gap: 2px;">
+          ${colIdx > 0 ? `
+            <button type="button" class="column-menu-btn" onclick="moveColumn(${col.id}, ${colIdx - 1})" title="Move column left">
+              ◀
+            </button>
+          ` : ''}
+          ${colIdx < columns.length - 1 ? `
+            <button type="button" class="column-menu-btn" onclick="moveColumn(${col.id}, ${colIdx + 1})" title="Move column right">
+              ▶
+            </button>
+          ` : ''}
           <button type="button" class="column-menu-btn" onclick="openRenameColumnModal(${col.id}, '${escapeHtml(col.name).replace(/'/g, "\\'")}')" title="Rename column">
             ✏️
           </button>
-          <button type="button" class="column-menu-btn" onclick="openDeleteColumnModal(${col.id}, '${escapeHtml(col.name).replace(/'/g, "\\'")}', ${col.tasks ? col.tasks.length : 0})" title="Delete column">
-            🗑️
-          </button>
+          ${isOwner ? `
+            <button type="button" class="column-menu-btn" onclick="openDeleteColumnModal(${col.id}, '${escapeHtml(col.name).replace(/'/g, "\\'")}', ${col.tasks ? col.tasks.length : 0})" title="Delete column">
+              🗑️
+            </button>
+          ` : ''}
         </div>
       </div>
 
@@ -1215,3 +1229,15 @@ window.closeDeleteTaskModal = closeDeleteTaskModal;
 window.handleDeleteComment = handleDeleteComment;
 window.handleRemoveMember = handleRemoveMember;
 window.openAccessibleMoveMenu = openAccessibleMoveMenu;
+
+async function moveColumn(columnId, targetPosition) {
+  try {
+    await API.patch(`/api/columns/${columnId}/move`, { position: targetPosition });
+    showToast('Column reordered.', 'success');
+    await loadBoard();
+  } catch (err) {
+    showToast(err.message || 'Failed to reorder column.', 'error');
+  }
+}
+window.moveColumn = moveColumn;
+

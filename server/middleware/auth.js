@@ -1,7 +1,13 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'taskboard_default_secret_key_change_in_production';
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.trim().length < 16) {
+    throw new Error('Fatal Security Configuration: A strong JWT_SECRET environment variable (at least 16 characters) is required.');
+  }
+  return secret.trim();
+}
 
 // Authenticate user via JWT in Authorization header
 function authenticateToken(req, res, next) {
@@ -12,8 +18,16 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access denied. No authentication token provided.' });
   }
 
+  let jwtSecret;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    jwtSecret = getJwtSecret();
+  } catch (secErr) {
+    console.error('Authentication configuration error:', secErr.message);
+    return res.status(500).json({ error: 'Authentication service configuration error.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret);
     const user = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(decoded.id);
 
     if (!user) {
@@ -23,16 +37,20 @@ function authenticateToken(req, res, next) {
     req.user = user;
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token. Please log in again.' });
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    }
+    return res.status(401).json({ error: 'Invalid or malformed authentication token.' });
   }
 }
 
 // Ensure the logged-in user is a member or owner of the board
 function requireBoardMember(req, res, next) {
-  const boardId = req.params.boardId || req.params.id;
+  const rawId = req.params.boardId || req.params.id;
+  const boardId = parseInt(rawId, 10);
 
-  if (!boardId) {
-    return res.status(400).json({ error: 'Board ID is required.' });
+  if (!boardId || isNaN(boardId)) {
+    return res.status(400).json({ error: 'A valid Board ID is required.' });
   }
 
   const membership = db.prepare(`
@@ -41,11 +59,15 @@ function requireBoardMember(req, res, next) {
   `).get(boardId, req.user.id);
 
   if (!membership) {
+    const boardExists = db.prepare('SELECT id FROM boards WHERE id = ?').get(boardId);
+    if (!boardExists) {
+      return res.status(404).json({ error: 'Board not found.' });
+    }
     return res.status(403).json({ error: 'Access denied. You are not a member of this board.' });
   }
 
   req.boardMembership = membership;
-  req.boardId = Number(boardId);
+  req.boardId = boardId;
   next();
 }
 
@@ -61,5 +83,5 @@ module.exports = {
   authenticateToken,
   requireBoardMember,
   requireBoardOwner,
-  JWT_SECRET
+  getJwtSecret
 };

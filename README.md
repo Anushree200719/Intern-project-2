@@ -1,21 +1,23 @@
 # TaskBoard – Full-Stack Kanban Task Management System
 
-TaskBoard is a modern, responsive, full-stack Kanban task and project management platform inspired by **Linear**, **Trello**, and **Jira**. Built with **Vanilla JavaScript (ES6+)**, **Node.js**, **Express.js**, and **SQLite3**, it demonstrates professional software engineering standards, database normalization, real HTML5 drag-and-drop, and security best practices.
+TaskBoard is a modern, responsive, full-stack Kanban task and project management platform inspired by **Linear**, **Trello**, and **Jira**. Built with **Vanilla JavaScript (ES6+)**, **Node.js**, **Express.js**, and **SQLite3**, it demonstrates professional software engineering standards, database normalization, real HTML5 drag-and-drop, atomic transactional reordering, and security best practices.
 
 ---
 
 ## 🚀 Key Features
 
 - **Authentication & Security**:
-  - Secure registration and login with input validation.
+  - Secure registration and login with comprehensive input validation.
   - Password hashing with **bcrypt** (10 salt rounds).
-  - Stateless **JWT** authentication with 7-day expiration.
+  - Stateless **JWT** authentication with 7-day expiration and fail-safe startup validation (refuses to start if `JWT_SECRET` is missing or insecure).
   - Role-based authorization: **Board Owner** vs. **Board Member** vs. **Non-member**.
-  - Author-only comment deletion and SQL injection prevention via parameterized queries.
+  - **Owner-Only Column Deletion**: Only board owners can delete columns (ordinary members receive `403 Forbidden`).
+  - Author-only comment deletion and SQL injection prevention via 100% parameterized queries.
 - **Kanban Board & Workflow**:
   - Horizontally scrollable board with customizable columns.
   - Automatic creation of default columns: `To Do`, `In Progress`, `Done`.
   - Column CRUD with safety confirmation for columns containing tasks.
+  - **Column Reordering**: Reorder columns left (`◀`) or right (`▶`) with persistent ordering persisted via atomic SQLite transactions (`PATCH /api/columns/:id/move`).
 - **Real HTML5 Drag-and-Drop**:
   - Drag tasks between columns or reorder within the same column.
   - Active drop indicator lines and visual drop target feedback.
@@ -52,7 +54,7 @@ TaskBoard is a modern, responsive, full-stack Kanban task and project management
 | **Backend** | Node.js & Express.js | High-performance JSON REST APIs, middleware pipeline |
 | **Database** | SQLite3 (`better-sqlite3`) | Normalized relational schema, foreign keys enabled, WAL mode, atomic transactions |
 | **Authentication** | `jsonwebtoken` & `bcryptjs` | Cryptographic password hashing and JWT authorization |
-| **Testing** | Node.js Automated Integration Suite | 12 end-to-end integration tests verifying all CRUD and authorization boundaries |
+| **Testing** | Automated Integration Suite | 31 end-to-end integration tests using an isolated disposable database |
 
 ---
 
@@ -61,14 +63,14 @@ TaskBoard is a modern, responsive, full-stack Kanban task and project management
 ```
 Mayur CEP/
 ├── server/
-│   ├── app.js               # Main Express application & middleware configuration
+│   ├── app.js               # Main Express application, security validation & middleware
 │   ├── db.js                # SQLite database connection & schema bootstrap
-│   ├── seed.js              # Database seed runner script
+│   ├── seed.js              # Safe database seed runner (supports --reset flag)
 │   ├── schema.sql           # Normalized SQLite schema with foreign keys and indexes
 │   ├── routes/
 │   │   ├── auth.js          # /api/auth (register, login, me, user lookup)
 │   │   ├── boards.js        # /api/boards (CRUD, members, search, activity)
-│   │   ├── columns.js       # /api/columns (update, delete with safety checks)
+│   │   ├── columns.js       # /api/columns (update, owner delete, move reorder)
 │   │   ├── tasks.js         # /api/tasks (CRUD, transactional move re-ordering)
 │   │   └── comments.js      # /api/comments (create, author-only delete)
 │   └── middleware/
@@ -89,11 +91,11 @@ Mayur CEP/
 ├── data/
 │   └── taskboard.db         # Persistent SQLite database file (WAL mode)
 ├── seed.sql                 # Sample users, boards, columns, tasks, comments, logs
-├── test_api.js              # Automated 12-point API integration test suite
+├── test_api.js              # Automated 31-point API integration test suite
 ├── package.json             # NPM project manifest and dependencies
 ├── .env.example             # Template for environment configuration
 ├── .env                     # Local environment settings
-├── .gitignore               # Excludes node_modules, data/*.db, .env
+├── .gitignore               # Excludes node_modules, data/*.db, .env, *.log
 ├── README.md                # Project documentation and setup guide
 ├── TECHNICAL_DOCUMENTATION.md # Architecture, ER diagram, and viva defense guide
 └── TASK_ORDERING.md         # Detailed ordering algorithm and complexity analysis
@@ -112,14 +114,17 @@ Mayur CEP/
 npm install
 ```
 
-### 3. Seed the Database
-Initialize the SQLite database with development sample data:
-```bash
-npm run seed
-```
+### 3. Seed Development Database
+- **Safe Mode** (seeds only if database is empty, preserves existing data):
+  ```bash
+  npm run seed
+  ```
+- **Explicit Reset** (resets database to clean initial sample state):
+  ```bash
+  npm run seed:reset
+  ```
 
 ### 4. Start the Application
-Start the server in development mode:
 ```bash
 npm start
 ```
@@ -132,7 +137,7 @@ Open your web browser and navigate to:
 
 ## 🔑 Sample Development Login Credentials
 
-For quick evaluation during viva demonstrations, the login page features one-click quick-fill buttons for these sample accounts:
+For quick evaluation during viva demonstrations, the login page features one-click quick-fill buttons:
 
 | Name | Role | Email | Password |
 | :--- | :--- | :--- | :--- |
@@ -146,42 +151,56 @@ For quick evaluation during viva demonstrations, the login page features one-cli
 
 ## 🧪 Automated Testing & Verification
 
-TaskBoard includes an automated backend integration test suite verifying authentication, board CRUD, permissions, drag-and-drop move transactions, comments, and author-only protections:
+TaskBoard includes an automated backend integration test suite verifying authentication, board CRUD, permissions, column reordering, drag-and-drop move transactions, comments, and author-only protections. Tests execute against an **isolated disposable database** that never modifies your real application data:
 
 ```bash
-node test_api.js
+npm test
 ```
 
-### Expected Output:
+### Test Results Summary:
 ```
---- 1. Testing Health Check ---
-✔ Health check OK
---- 2. Testing Login ---
-✔ Alex login OK, token received
---- 3. Testing Registration ---
-✔ Registration OK, token received
---- 4. Testing Board Retrieval ---
-✔ Boards retrieved: 1 board(s). First: "Sprint 14 - Web App Launch"
---- 5. Testing Board Details & Columns ---
-✔ Board detail OK, columns count: 3 (names: To Do, In Progress, Done)
---- 6. Testing Task Creation in Column 1 ---
-✔ Task created with ID 9: "Automated Test Task 1" at position 3
---- 7. Testing Comment Creation ---
-✔ Comment created with ID 5
---- 8. Testing Authorization Enforcement (Non-member blocked) ---
-✔ Non-member correctly blocked with 403 Forbidden
---- 9. Testing Task Movement & Transactional Reordering ---
-✔ Task successfully moved to column "In Progress" at position 0
---- 10. Testing Search & Filters ---
-✔ Search and filters working accurately (found matching task)
---- 11. Testing Comment Deletion (Author Allowed) ---
-✔ Comment successfully deleted by author
---- 12. Testing Task Deletion ---
-✔ Task successfully deleted
+--- 1. Authentication & Token Verification ---
+• Health check returns 200 OK... ✅ PASS
+• Successful login for seed owner (Alex Morgan)... ✅ PASS
+• Successful login for seed member (Sam Taylor)... ✅ PASS
+• Login rejection for incorrect password (401)... ✅ PASS
+• Login rejection for non-existent user (401)... ✅ PASS
+• Successful registration of a new user... ✅ PASS
+• Duplicate registration rejection (400)... ✅ PASS
+• Missing token rejection on protected route (401)... ✅ PASS
+• Invalid / malformed token rejection (401)... ✅ PASS
+• Expired token rejection (401)... ✅ PASS
 
-=======================================
-ALL 12 BACKEND INTEGRATION TESTS PASSED!
-=======================================
+--- 2. Role-Based Authorization & Permissions ---
+• Non-member cannot access private board (403)... ✅ PASS
+• Non-owner cannot rename board (403)... ✅ PASS
+• Non-owner cannot delete board (403)... ✅ PASS
+• Non-owner cannot invite members (403)... ✅ PASS
+• Board owner can invite existing registered user (201)... ✅ PASS
+• Inviting user not registered returns 404... ✅ PASS
+• Ordinary member CANNOT delete column (403 Forbidden)... ✅ PASS
+• Board owner can delete an empty column (200)... ✅ PASS
+• Column deletion with tasks requires confirmation (?force=true)... ✅ PASS
+• Task assignee must be a member of the board (400 if not)... ✅ PASS
+• Only comment author can delete their comment (403 for other member, 200 for author)... ✅ PASS
+
+--- 3. Column and Task Ordering Verification ---
+• Column reordering: move column to new position... ✅ PASS
+• Task move within same column updates positions in transaction... ✅ PASS
+• Task move to different column updates both columns in transaction... ✅ PASS
+• Reject task move to column belonging to another board (400)... ✅ PASS
+
+--- 4. Data Validation and Error Handling ---
+• Reject task with invalid priority (400)... ✅ PASS
+• Reject task with invalid due date format (400)... ✅ PASS
+• Reject task creation with empty title (400)... ✅ PASS
+• Reject comment creation with empty content (400)... ✅ PASS
+• Reject task move with negative position (400)... ✅ PASS
+• Reject column move with negative position (400)... ✅ PASS
+
+======================================================
+ Test Execution Completed: 31 Passed, 0 Failed
+======================================================
 ```
 
 ---
@@ -192,7 +211,7 @@ ALL 12 BACKEND INTEGRATION TESTS PASSED!
 | :--- | :---: | :--- |
 | **Database Design** | **15** | 7 normalized tables, foreign keys with cascading actions, unique constraints, and WAL mode. |
 | **Backend APIs** | **20** | Clean REST conventions, comprehensive input validation, parameterized SQL, and error handling. |
-| **Authentication** | **5** | bcrypt hashing, JWT issuance and verification, route guards, and session persistence. |
+| **Authentication** | **5** | bcrypt hashing, fail-safe JWT validation, route guards, and session persistence. |
 | **Frontend Functionality** | **25** | HTML5 Drag & Drop, optimistic UI with rollback, task CRUD, comments, filters, and modals. |
 | **UI Design & Responsiveness**| **10** | SaaS dashboard aesthetics, dark/light theme, overdue alerts, and mobile compatibility. |
 | **Code Quality & Architecture**| **20** | Modular ES6+ JavaScript, layered Express backend, automated tests, clean gitignore. |

@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
-const { authenticateToken, JWT_SECRET } = require('../middleware/auth');
+const { authenticateToken, getJwtSecret } = require('../middleware/auth');
 
 // Email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -59,7 +59,7 @@ router.post('/register', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { id: newUser.id, email: newUser.email },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: '7d' }
     );
 
@@ -100,7 +100,7 @@ router.post('/login', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { id: user.id, email: user.email },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: '7d' }
     );
 

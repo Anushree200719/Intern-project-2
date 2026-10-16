@@ -2,7 +2,7 @@
 
 ## 1. System Overview & Architecture
 
-**TaskBoard** is a full-stack, enterprise-grade Kanban project and task management application designed for interns, developers, and agile engineering squads. Built with modern Vanilla JavaScript (ES6+), Node.js, Express, and SQLite (`better-sqlite3`), it prioritizes **architectural cleanliness, transaction safety, robust authorization, and a high-performance, responsive UI**.
+**TaskBoard** is a full-stack, enterprise-grade Kanban project and task management application designed for interns, developers, and agile engineering squads. Built with **Vanilla JavaScript (ES6+)**, **Node.js**, **Express**, and **SQLite (`better-sqlite3`)**, it prioritizes **architectural cleanliness, transaction safety, robust authorization, and a high-performance, responsive UI**.
 
 ### 1.1 Architectural Pattern: Layered MVC / Clean Separation
 The system enforces strict decoupling between the presentation layer, business routing, authorization middleware, and persistent storage:
@@ -185,23 +185,6 @@ All endpoints communicate via JSON over HTTP. Protected endpoints require the `A
 #### `GET /api/boards`
 - **Description**: Lists all boards where the authenticated user is an owner or member.
 - **Response**: `200 OK`
-  ```json
-  {
-    "boards": [
-      {
-        "id": 1,
-        "name": "Sprint 14 - Web App Launch",
-        "description": "Q4 Core Deliverables...",
-        "owner_id": 1,
-        "owner_name": "Alex Morgan",
-        "role": "owner",
-        "task_count": 8,
-        "member_count": 3,
-        "created_at": "2026-10-10 12:00:00"
-      }
-    ]
-  }
-  ```
 
 #### `POST /api/boards`
 - **Description**: Creates a new board, assigns owner membership, and initializes default columns ("To Do", "In Progress", "Done") in an atomic transaction.
@@ -210,7 +193,7 @@ All endpoints communicate via JSON over HTTP. Protected endpoints require the `A
 
 #### `GET /api/boards/:id`
 - **Description**: Returns full board details, columns with nested tasks, and members list.
-- **Authorization**: Enforces board membership. Non-members receive `403 Forbidden`.
+- **Authorization**: Enforces board membership. Non-members receive `403 Forbidden`. Non-existent boards return `404 Not Found`.
 
 #### `PUT /api/boards/:id`
 - **Description**: Renames board or updates description.
@@ -218,7 +201,7 @@ All endpoints communicate via JSON over HTTP. Protected endpoints require the `A
 
 #### `DELETE /api/boards/:id`
 - **Description**: Permanently deletes a board and cascades to all child records.
-- **Authorization**: Owner only.
+- **Authorization**: Owner only. Non-owners receive `403 Forbidden`.
 
 ---
 
@@ -244,13 +227,21 @@ All endpoints communicate via JSON over HTTP. Protected endpoints require the `A
 - **Response**: `201 Created`
 
 #### `PUT /api/columns/:id`
-- **Description**: Renames an existing column.
-- **Request Body**: `{ "name": "QA Testing" }`
+- **Description**: Renames an existing column or updates position.
+- **Request Body**: `{ "name": "QA Testing", "position": 1 }`
+- **Response**: `200 OK`
+
+#### `PATCH /api/columns/:id/move`
+- **Description**: Reorders a column to a new position. Affected sibling columns are re-indexed consecutively in an atomic SQLite transaction.
+- **Request Body**: `{ "position": 2 }`
 - **Response**: `200 OK`
 
 #### `DELETE /api/columns/:id`
-- **Description**: Deletes a column. If column contains tasks, requires `?force=true` query parameter for safety confirmation. Re-indexes remaining columns.
+- **Description**: Deletes a column.
+- **Authorization**: **Board Owner only**. Ordinary members receive `403 Forbidden`.
+- **Policy**: If column contains tasks, requires `?force=true` query parameter for safety confirmation. Re-indexes remaining columns.
 - **Responses**:
+  - `403 Forbidden`: User is not board owner.
   - `400 Bad Request`: `{ "error": "Column contains tasks...", "hasTasks": true, "taskCount": 4 }`
   - `200 OK`: Column deleted.
 
@@ -259,7 +250,7 @@ All endpoints communicate via JSON over HTTP. Protected endpoints require the `A
 ### 3.5 Tasks Endpoints
 
 #### `POST /api/columns/:id/tasks`
-- **Description**: Creates a new task inside specified column. Enforces that `assignee_id` (if provided) is a member of this board.
+- **Description**: Creates a new task inside specified column. Enforces that `assignee_id` (if provided) is a registered member of this board.
 - **Request Body**:
   ```json
   {
@@ -281,7 +272,7 @@ All endpoints communicate via JSON over HTTP. Protected endpoints require the `A
 - **Response**: `200 OK`
 
 #### `PATCH /api/tasks/:id/move`
-- **Description**: Reorders a task within the same column or moves it across columns at a specified position. Runs inside a SQLite atomic transaction.
+- **Description**: Reorders a task within the same column or moves it across columns at a specified position. Runs inside a SQLite atomic transaction. Rejects cross-board moves.
 - **Request Body**: `{ "column_id": 2, "position": 0 }`
 - **Response**: `200 OK`
 
@@ -312,10 +303,11 @@ All endpoints communicate via JSON over HTTP. Protected endpoints require the `A
 | Security Aspect | Implementation Detail | Viva Justification |
 | :--- | :--- | :--- |
 | **Password Hashing** | Passwords hashed using `bcrypt` (10 salt rounds). Plain-text passwords never stored or logged. | Resistant to rainbow-table and dictionary attacks. |
-| **JWT Authentication** | Signed using `HS256` with environment variable secret (`JWT_SECRET`). 7-day expiration. | Stateless authentication avoiding server-side session stores. |
+| **JWT Authentication** | Signed using `HS256` with strong environment variable secret (`JWT_SECRET`). Fails startup if missing/short. 7-day expiration. | Stateless authentication avoiding server-side session stores. |
 | **SQL Injection Prevention** | 100% of queries use parameterized prepared statements (`db.prepare('... WHERE id = ?').get(...)`). | Parameter values are strictly separated from query parse tree. |
 | **Cross-Site Scripting (XSS)** | All user strings sanitized with `escapeHtml()` and rendered using `textContent` or escaped templates. | Prevents script injection in task titles, descriptions, and comments. |
-| **ID Guessing Prevention** | Every query checks board membership against `req.user.id`. Guessing valid IDs yields `403 Forbidden`. | Enforces strict multi-tenant authorization boundaries. |
+| **ID Guessing Prevention** | Every query checks board membership against `req.user.id`. Guessing valid IDs yields `403 Forbidden` or `404 Not Found`. | Enforces strict multi-tenant authorization boundaries. |
+| **Owner-Only Column Deletion** | Server checks `membership.role === 'owner'` in `DELETE /api/columns/:id`. Non-owners receive `403`. | Prevents ordinary members from deleting project workflow stages. |
 | **Author-Only Comments** | Server verifies comment ownership before deletion (`comment.user_id === req.user.id`). | Prevents malicious users from tampering with team audit logs. |
 
 ---
@@ -324,10 +316,10 @@ All endpoints communicate via JSON over HTTP. Protected endpoints require the `A
 
 | Evaluation Criterion | Marks | TaskBoard Implementation Evidence |
 | :--- | :--- | :--- |
-| **Database Design & Relationships** | **15 Marks** | Normalized 7-table SQLite schema (`users`, `boards`, `board_members`, `columns`, `tasks`, `comments`, `activity_log`). `PRAGMA foreign_keys = ON`, unique constraints, cascading deletes, and WAL mode. |
-| **Backend APIs & Authorization** | **20 Marks** | 18 clean REST endpoints with proper HTTP status codes (200, 201, 400, 401, 403, 404, 500), input validation, parameterized queries, and atomic transactions. |
-| **Authentication & Security** | **5 Marks** | Registration, login, bcrypt encryption, JWT middleware, token expiration handling, and owner/member RBAC checks. |
-| **Frontend Functionality** | **25 Marks** | Native HTML5 Drag & Drop, optimistic UI with rollback, task CRUD, comments, multi-filter search, member invitations, and accessible move fallbacks. |
+| **Database Design & Relationships** | **15 Marks** | Normalized 7-table SQLite schema (`users`, `boards`, `board_members`, `columns`, `tasks`, `comments`, `activity_log`). `PRAGMA foreign_keys = ON`, unique constraints, cascading deletes, and WAL mode. Safe seed mode and isolated test database. |
+| **Backend APIs & Authorization** | **20 Marks** | 19 clean REST endpoints with proper HTTP status codes (200, 201, 400, 401, 403, 404, 500), input validation, parameterized queries, and atomic transactions. |
+| **Authentication & Security** | **5 Marks** | Registration, login, bcrypt encryption, JWT middleware, fail-safe startup checks, and owner/member RBAC checks. |
+| **Frontend Functionality** | **25 Marks** | Native HTML5 Drag & Drop, column left/right reordering, optimistic UI with rollback, task CRUD, comments, multi-filter search, member invitations, and accessible move fallbacks. |
 | **UI Design & Responsiveness** | **10 Marks** | Sleek Linear/Trello-inspired design system (`css/styles.css`), CSS variables, dark/light theme switch, overdue badges, avatar initials, and mobile responsiveness. |
-| **Code Quality & Architecture** | **20 Marks** | Modular ES6+ Vanilla JS, layered Express backend, automated integration test suite (`test_api.js` with 12 passing tests), and zero framework bloat. |
+| **Code Quality & Architecture** | **20 Marks** | Modular ES6+ Vanilla JS, layered Express backend, automated integration test suite (`test_api.js` with 31 passing tests on an isolated test DB), and clean git configuration. |
 | **Documentation & Deliverables** | **5 Marks** | Comprehensive `README.md`, `TECHNICAL_DOCUMENTATION.md`, `TASK_ORDERING.md`, `schema.sql`, `seed.sql`, ER Diagram, and sample credentials. |

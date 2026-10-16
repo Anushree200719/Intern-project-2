@@ -1,8 +1,9 @@
 node_modules/
-data/taskboard.db
-data/taskboard.db-journal
-data/taskboard.db-wal
-data/taskboard.db-shm
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
 .env
+.env.local
 .DS_Store
 *.log

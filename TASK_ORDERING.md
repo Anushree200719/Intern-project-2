@@ -1,7 +1,7 @@
-# TaskBoard Task Ordering Specification & Algorithmic Design
+# TaskBoard Task & Column Ordering Specification & Algorithmic Design
 
 ## 1. Overview
-In a Kanban system, maintaining deterministic, persistent, and race-free ordering of task cards both **within a column** and **across columns** is a critical engineering requirement. When a user drags a task from position 3 to position 0, or drops a task from "To Do" into the middle of "In Progress", both the database state and the user interface must remain perfectly synchronized.
+In a Kanban system, maintaining deterministic, persistent, and race-free ordering of task cards both **within a column** and **across columns**, as well as **column positioning on the board canvas**, is a critical engineering requirement. When a user drags a task from position 3 to position 0, drops a task into another column, or shifts a column left or right, both the database state and the user interface must remain perfectly synchronized.
 
 This document describes the chosen ordering algorithm, architectural alternatives evaluated, complexity considerations, and recovery mechanisms implemented in **TaskBoard**.
 
@@ -11,7 +11,7 @@ This document describes the chosen ordering algorithm, architectural alternative
 
 | Strategy | Description | Pros | Cons / Trade-offs | Verdict |
 | :--- | :--- | :--- | :--- | :--- |
-| **A. Consecutive Zero-Indexed Integers (`position = 0, 1, 2...`)** | Every task stores a contiguous integer rank within its column. | • Human-readable and intuitive for technical viva.<br>• Zero risk of floating-point precision exhaustion.<br>• Easily audited with standard SQL queries (`ORDER BY position ASC`). | • Requires updating sibling rows on insertion or deletion. | **SELECTED (Optimal for SQLite)** |
+| **A. Consecutive Zero-Indexed Integers (`position = 0, 1, 2...`)** | Every task and column stores a contiguous integer rank within its parent entity. | • Human-readable and intuitive for technical viva.<br>• Zero risk of floating-point precision exhaustion.<br>• Easily audited with standard SQL queries (`ORDER BY position ASC`). | • Requires updating sibling rows on insertion or deletion. | **SELECTED (Optimal for SQLite)** |
 | **B. Fractional / Floating-Point Indexing (`midpoint = (posA + posB) / 2`)** | Positions are floating-point numbers; inserting between 1.0 and 2.0 assigns 1.5. | • Single-row update on move. | • IEEE-754 precision runs out after ~50 intermediate drops (requiring complex re-balancing routines).<br>• Harder to debug during viva defense. | Rejected |
 | **C. Doubly-Linked List (`prev_id`, `next_id`)** | Each task points to its predecessor and successor. | • Constant-time node insertion. | • Recursive CTEs needed to order tasks.<br>• Corrupt pointers break the entire column. | Rejected |
 
@@ -60,11 +60,32 @@ When task `T` is moved from column `C_source` to column `C_target` at position `
    ```
 4. **Transaction Commit**.
 
+### 3.3. Column Reordering Algorithm
+When a column `Col` is moved to a new position on the board (via `PATCH /api/columns/:id/move` or UI controls `◀` / `▶`):
+
+1. **Board Scope Validation**: Verify column exists and the authenticated user is an authorized member/owner of the board.
+2. **Fetch Sibling Columns**:
+   ```sql
+   SELECT id FROM columns 
+   WHERE board_id = ? AND id != ? 
+   ORDER BY position ASC, id ASC;
+   ```
+3. **Boundary Clamping & Splice**:
+   ```javascript
+   const clampedPos = Math.max(0, Math.min(targetPos, siblingCols.length));
+   siblingCols.splice(clampedPos, 0, { id: columnId });
+   ```
+4. **Atomic Rank Update**:
+   ```sql
+   UPDATE columns SET position = ? WHERE id = ?;
+   ```
+5. **UI Synchronization**: Returns the updated column; the frontend refreshes column placement instantly and persists order across page refreshes.
+
 ---
 
 ## 4. Time and Space Complexity Analysis
 
-- **Space Complexity**: $O(K)$ where $K$ is the number of tasks in the target column (typically $5 - 50$ cards per column). Memory footprint is minimal (< 2 KB).
+- **Space Complexity**: $O(K)$ where $K$ is the number of tasks in the target column or columns on the board. Memory footprint is minimal (< 2 KB).
 - **Time Complexity**:
   - In-memory array re-ordering: $O(K)$.
   - Prepared statement execution in SQLite: $O(K)$ indexed updates on primary key `id`.
@@ -84,16 +105,17 @@ When task `T` is moved from column `C_source` to column `C_target` at position `
 
 ### 5.2. Boundary Clamping
 If a client sends an out-of-bounds position (e.g., `position: 9999` on a column with 3 tasks):
-- The server clamps the insertion index to `Math.max(0, parseInt(position, 10))`.
-- If the index exceeds array length, `splice()` appends the card safely to the end of the column.
+- The server clamps the insertion index safely to `Math.min(targetPosition, siblings.length)`.
+- If the index is negative, the API rejects it with HTTP `400 Bad Request`.
 
-### 5.3. Task Deletion Compaction
-When a task is deleted via `DELETE /api/tasks/:id`:
-- Remaining tasks in that column are immediately re-indexed from `0` to `count - 1`.
+### 5.3. Task & Column Deletion Compaction
+When a task or column is deleted:
+- Remaining sibling entities are immediately re-indexed from `0` to `count - 1`.
 - This self-healing behavior eliminates index drift over time.
 
 ### 5.4. Accessible Fallback (Non-Drag Interface)
 For keyboard-only navigation, screen readers, and mobile devices:
 - Every task card features a `"⇄ Move"` quick menu.
+- Every column header features `"◀"` (move left) and `"▶"` (move right) buttons.
 - The Task Detail Modal provides a `"Move To Column"` select dropdown.
 - Both use the identical transactional backend endpoint, guaranteeing 100% feature parity without requiring drag-and-drop gestures.

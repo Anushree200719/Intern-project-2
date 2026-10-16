@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server/app.js",
     "dev": "node --watch server/app.js",
-    "seed": "node server/seed.js"
+    "seed": "node server/seed.js",
+    "seed:reset": "node server/seed.js --reset",
+    "test": "node test_api.js"
   },
   "keywords": [
     "kanban",
