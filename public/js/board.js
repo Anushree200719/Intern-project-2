@@ -93,6 +93,32 @@ function setupEventListeners() {
   document.getElementById('invite-member-form')?.addEventListener('submit', handleInviteMember);
   document.getElementById('rename-board-form')?.addEventListener('submit', handleRenameBoard);
   document.getElementById('btn-edit-board-title')?.addEventListener('click', openRenameBoardModal);
+
+  // Top Nav Buttons
+  document.getElementById('board-members-stack')?.addEventListener('click', openMembersModal);
+  document.getElementById('btn-open-members-modal')?.addEventListener('click', openMembersModal);
+  document.getElementById('btn-open-activity-modal')?.addEventListener('click', openActivityModal);
+  document.getElementById('btn-open-add-column-modal')?.addEventListener('click', openAddColumnModal);
+
+  // Modal Close/Cancel Buttons
+  document.getElementById('close-task-detail-btn')?.addEventListener('click', closeTaskDetailModal);
+  document.getElementById('cancel-task-detail-btn')?.addEventListener('click', closeTaskDetailModal);
+  document.getElementById('close-create-task-btn')?.addEventListener('click', closeCreateTaskModal);
+  document.getElementById('cancel-create-task-btn')?.addEventListener('click', closeCreateTaskModal);
+  document.getElementById('close-add-column-btn')?.addEventListener('click', closeAddColumnModal);
+  document.getElementById('cancel-add-column-btn')?.addEventListener('click', closeAddColumnModal);
+  document.getElementById('close-rename-column-btn')?.addEventListener('click', closeRenameColumnModal);
+  document.getElementById('cancel-rename-column-btn')?.addEventListener('click', closeRenameColumnModal);
+  document.getElementById('close-delete-column-btn')?.addEventListener('click', closeDeleteColumnModal);
+  document.getElementById('cancel-delete-column-btn')?.addEventListener('click', closeDeleteColumnModal);
+  document.getElementById('close-members-modal-btn')?.addEventListener('click', closeMembersModal);
+  document.getElementById('done-members-modal-btn')?.addEventListener('click', closeMembersModal);
+  document.getElementById('close-activity-modal-btn')?.addEventListener('click', closeActivityModal);
+  document.getElementById('done-activity-modal-btn')?.addEventListener('click', closeActivityModal);
+  document.getElementById('close-delete-task-btn')?.addEventListener('click', closeDeleteTaskModal);
+  document.getElementById('cancel-delete-task-btn')?.addEventListener('click', closeDeleteTaskModal);
+  document.getElementById('close-rename-board-btn')?.addEventListener('click', closeRenameBoardModal);
+  document.getElementById('cancel-rename-board-btn')?.addEventListener('click', closeRenameBoardModal);
 }
 
 // Load authoritative board data from backend
@@ -122,7 +148,7 @@ async function loadSidebarRecent() {
     container.innerHTML = '';
     boards.slice(0, 6).forEach(b => {
       const link = document.createElement('a');
-      link.href = `board.html?id=${b.id}`;
+      link.href = `board.html?id=${encodeURIComponent(b.id)}`;
       link.className = `recent-board-link ${b.id == boardId ? 'active' : ''}`;
       link.innerHTML = `
         <span class="recent-board-dot"></span>
@@ -237,20 +263,20 @@ function renderKanbanColumns() {
         </div>
         <div style="display: flex; align-items: center; gap: 2px;">
           ${colIdx > 0 ? `
-            <button type="button" class="column-menu-btn" onclick="moveColumn(${col.id}, ${colIdx - 1})" title="Move column left">
+            <button type="button" class="column-menu-btn btn-col-left" title="Move column left">
               ◀
             </button>
           ` : ''}
           ${colIdx < columns.length - 1 ? `
-            <button type="button" class="column-menu-btn" onclick="moveColumn(${col.id}, ${colIdx + 1})" title="Move column right">
+            <button type="button" class="column-menu-btn btn-col-right" title="Move column right">
               ▶
             </button>
           ` : ''}
-          <button type="button" class="column-menu-btn" onclick="openRenameColumnModal(${col.id}, '${escapeHtml(col.name).replace(/'/g, "\\'")}')" title="Rename column">
+          <button type="button" class="column-menu-btn btn-col-rename" title="Rename column">
             ✏️
           </button>
           ${isOwner ? `
-            <button type="button" class="column-menu-btn" onclick="openDeleteColumnModal(${col.id}, '${escapeHtml(col.name).replace(/'/g, "\\'")}', ${col.tasks ? col.tasks.length : 0})" title="Delete column">
+            <button type="button" class="column-menu-btn btn-col-delete" title="Delete column">
               🗑️
             </button>
           ` : ''}
@@ -262,7 +288,7 @@ function renderKanbanColumns() {
       </div>
 
       <div class="column-footer">
-        <button type="button" class="btn-add-task-quick" onclick="openCreateTaskModal(${col.id}, '${escapeHtml(col.name).replace(/'/g, "\\'")}')">
+        <button type="button" class="btn-add-task-quick">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -271,6 +297,21 @@ function renderKanbanColumns() {
         </button>
       </div>
     `;
+
+    const leftBtn = colEl.querySelector('.btn-col-left');
+    if (leftBtn) leftBtn.addEventListener('click', () => moveColumn(col.id, colIdx - 1));
+
+    const rightBtn = colEl.querySelector('.btn-col-right');
+    if (rightBtn) rightBtn.addEventListener('click', () => moveColumn(col.id, colIdx + 1));
+
+    const renameBtn = colEl.querySelector('.btn-col-rename');
+    if (renameBtn) renameBtn.addEventListener('click', () => openRenameColumnModal(col.id, col.name));
+
+    const deleteBtn = colEl.querySelector('.btn-col-delete');
+    if (deleteBtn) deleteBtn.addEventListener('click', () => openDeleteColumnModal(col.id, col.name, col.tasks ? col.tasks.length : 0));
+
+    const addTaskBtn = colEl.querySelector('.btn-add-task-quick');
+    if (addTaskBtn) addTaskBtn.addEventListener('click', () => openCreateTaskModal(col.id, col.name));
 
     const cardsContainer = colEl.querySelector(`#cards-container-${col.id}`);
 
@@ -324,7 +365,7 @@ function createTaskCardElement(task, overdue) {
       <span class="priority-badge ${priorityClass}">${escapeHtml(task.priority || 'medium')}</span>
       <div style="display: flex; align-items: center; gap: 6px;">
         <!-- Accessible Move dropdown button -->
-        <button type="button" class="btn btn-ghost btn-sm" style="padding: 2px 6px; font-size: 11px;" title="Move to another column" onclick="event.stopPropagation(); openAccessibleMoveMenu(event, ${task.id}, ${task.column_id})">
+        <button type="button" class="btn btn-ghost btn-sm btn-accessible-move" style="padding: 2px 6px; font-size: 11px;" title="Move to another column">
           ⇄ Move
         </button>
       </div>
@@ -360,6 +401,15 @@ function createTaskCardElement(task, overdue) {
       </div>
     </div>
   `;
+
+  // Accessible Move button handler
+  const moveBtn = card.querySelector('.btn-accessible-move');
+  if (moveBtn) {
+    moveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openAccessibleMoveMenu(e, task.id, task.column_id);
+    });
+  }
 
   // Click card to open Detail Modal
   card.addEventListener('click', () => {
@@ -537,7 +587,7 @@ function openAccessibleMoveMenu(event, taskId, currentColumnId) {
 
   const rect = event.target.getBoundingClientRect();
   menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
-  menu.style.left = `${rect.left + window.scrollX - 60}px`;
+  menu.style.left = `${Math.max(10, rect.left + window.scrollX - 60)}px`;
 
   const header = document.createElement('div');
   header.style.padding = '4px 8px';
@@ -547,20 +597,29 @@ function openAccessibleMoveMenu(event, taskId, currentColumnId) {
   header.textContent = 'Move to column:';
   menu.appendChild(header);
 
-  currentBoard.columns.forEach(col => {
-    if (col.id === currentColumnId) return;
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'dropdown-item';
-    item.textContent = `→ ${col.name}`;
-    item.addEventListener('click', async () => {
-      menu.remove();
-      const pos = col.tasks ? col.tasks.length : 0;
-      await executeTaskMove(taskId, col.id, pos);
-      showToast(`Moved to ${col.name}`, 'success');
+  const otherColumns = (currentBoard.columns || []).filter(col => col.id !== currentColumnId);
+  if (otherColumns.length === 0) {
+    const emptyNotice = document.createElement('div');
+    emptyNotice.style.padding = '6px 10px';
+    emptyNotice.style.fontSize = '12px';
+    emptyNotice.style.color = 'var(--text-muted)';
+    emptyNotice.textContent = 'No other columns available';
+    menu.appendChild(emptyNotice);
+  } else {
+    otherColumns.forEach(col => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'dropdown-item';
+      item.textContent = `→ ${col.name}`;
+      item.addEventListener('click', async () => {
+        menu.remove();
+        const pos = col.tasks ? col.tasks.length : 0;
+        await executeTaskMove(taskId, col.id, pos);
+        showToast(`Moved to ${col.name}`, 'success');
+      });
+      menu.appendChild(item);
     });
-    menu.appendChild(item);
-  });
+  }
 
   document.body.appendChild(menu);
 
@@ -568,9 +627,20 @@ function openAccessibleMoveMenu(event, taskId, currentColumnId) {
     if (!menu.contains(e.target)) {
       menu.remove();
       document.removeEventListener('click', cleanup);
+      document.removeEventListener('keydown', keyCleanup);
     }
   };
-  setTimeout(() => document.addEventListener('click', cleanup), 10);
+  const keyCleanup = (e) => {
+    if (e.key === 'Escape') {
+      menu.remove();
+      document.removeEventListener('click', cleanup);
+      document.removeEventListener('keydown', keyCleanup);
+    }
+  };
+  setTimeout(() => {
+    document.addEventListener('click', cleanup);
+    document.addEventListener('keydown', keyCleanup);
+  }, 10);
 }
 
 // Filter Matching Logic
@@ -736,13 +806,18 @@ function renderTaskComments(comments) {
           <span class="comment-time">${formattedTime}</span>
         </div>
         ${isAuthor ? `
-          <button type="button" class="comment-delete-btn" onclick="handleDeleteComment(${c.id})" title="Delete your comment">
+          <button type="button" class="comment-delete-btn" title="Delete your comment">
             ✕ Delete
           </button>
         ` : ''}
       </div>
       <div class="comment-content">${escapeHtml(c.content)}</div>
     `;
+
+    const delCommentBtn = item.querySelector('.comment-delete-btn');
+    if (delCommentBtn) {
+      delCommentBtn.addEventListener('click', () => handleDeleteComment(c.id));
+    }
 
     container.appendChild(item);
   });
@@ -1110,12 +1185,17 @@ function renderMembersList() {
       <div style="display: flex; align-items: center; gap: 8px;">
         <span class="board-role-badge ${isMemberOwner ? 'owner' : 'member'}">${m.role}</span>
         ${isOwner && !isMemberOwner ? `
-          <button type="button" class="btn btn-ghost btn-sm" style="color: var(--danger); padding: 2px 6px;" onclick="handleRemoveMember(${m.id}, '${escapeHtml(m.name).replace(/'/g, "\\'")}')" title="Remove member">
+          <button type="button" class="btn btn-ghost btn-sm btn-remove-member" style="color: var(--danger); padding: 2px 6px;" title="Remove member">
             ✕ Remove
           </button>
         ` : ''}
       </div>
     `;
+
+    const removeBtn = row.querySelector('.btn-remove-member');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => handleRemoveMember(m.id, m.name));
+    }
 
     container.appendChild(row);
   });

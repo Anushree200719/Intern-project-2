@@ -3,13 +3,21 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+const { getJwtSecret } = require('./middleware/auth');
+
 // Ensure required security configuration is present
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim().length < 16) {
-  console.error('FATAL SECURITY CONFIGURATION: JWT_SECRET environment variable is missing or insecure (< 16 characters). Refusing to start.');
-  if (process.env.NODE_ENV !== 'test') {
-    process.exit(1);
+function validateSecurityConfiguration() {
+  const isTest = process.env.NODE_ENV === 'test';
+  try {
+    getJwtSecret();
+  } catch (err) {
+    console.error(`FATAL SECURITY CONFIGURATION: ${err.message} Refusing to start.`);
+    if (!isTest) process.exit(1);
+    throw err;
   }
 }
+
+validateSecurityConfiguration();
 
 // Ensure DB is initialized
 require('./db');
@@ -23,8 +31,79 @@ const commentsRoutes = require('./routes/comments');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security & Parsing Middleware
-app.use(cors());
+// Reverse Proxy Trust Configuration:
+// Proxy headers MUST NOT be trusted unless the deployment explicitly configures trusted proxies.
+const trustProxyEnv = process.env.TRUST_PROXY;
+if (trustProxyEnv === 'true' || trustProxyEnv === '1') {
+  app.set('trust proxy', 1);
+} else if (trustProxyEnv && trustProxyEnv.trim() !== 'false' && trustProxyEnv.trim() !== '0') {
+  app.set('trust proxy', trustProxyEnv.trim());
+} else {
+  app.set('trust proxy', false);
+}
+
+// Environment-based CORS Configuration
+const allowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS || process.env.CORS_ORIGIN;
+let corsOptions;
+
+if (allowedOriginsEnv && allowedOriginsEnv.trim()) {
+  const allowedOrigins = allowedOriginsEnv.split(',').map(o => o.trim()).filter(Boolean);
+  corsOptions = {
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g., mobile apps, curl, server-side fetch)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Origin blocked by CORS policy.'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  };
+} else {
+  // Local development default: allow localhost/127.0.0.1 or same-origin
+  corsOptions = {
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+      if (isLocalhost || process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(new Error('Origin blocked by CORS policy in production. Configure CORS_ALLOWED_ORIGINS.'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  };
+}
+
+app.use(cors(corsOptions));
+
+// Security Headers Middleware with tuned Content Security Policy
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
+    "img-src 'self' data:; " +
+    "connect-src 'self'; " +
+    "frame-ancestors 'none'; " +
+    "base-uri 'self'; " +
+    "form-action 'self';"
+  );
+  next();
+});
+
+// Body Parsing Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -68,7 +147,10 @@ app.use('/api/*', (req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled server error:', err);
+  if (err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ error: err.message });
+  }
+  console.error('Unhandled server error:', err.message || err);
   res.status(500).json({ error: 'Internal server error.' });
 });
 

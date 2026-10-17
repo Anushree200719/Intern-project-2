@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const { isPositiveInteger, parsePositiveInteger, isNonNegativeInteger, parseNonNegativeInteger } = require('../utils/validation');
 
 router.use(authenticateToken);
 
@@ -23,9 +24,14 @@ function getColumnAndVerifyMembership(columnId, userId) {
 // PUT /api/columns/:id - Rename column or update position
 router.put('/:id', (req, res) => {
   try {
-    const columnId = parseInt(req.params.id, 10);
-    if (!columnId || isNaN(columnId)) {
-      return res.status(400).json({ error: 'A valid Column ID is required.' });
+    if (!isPositiveInteger(req.params.id)) {
+      return res.status(400).json({ error: 'A valid positive Column ID is required.' });
+    }
+
+    const columnId = parsePositiveInteger(req.params.id);
+
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body.' });
     }
 
     const { name, position } = req.body;
@@ -37,10 +43,11 @@ router.put('/:id', (req, res) => {
 
     // Handle position update if provided
     if (position !== undefined && position !== null) {
-      const targetPos = parseInt(position, 10);
-      if (isNaN(targetPos) || targetPos < 0) {
+      if (!isNonNegativeInteger(position)) {
         return res.status(400).json({ error: 'Position must be a non-negative integer.' });
       }
+
+      const targetPos = parseNonNegativeInteger(position);
 
       const reorderTx = db.transaction(() => {
         const siblingCols = db.prepare(`
@@ -63,28 +70,31 @@ router.put('/:id', (req, res) => {
 
     // Handle name rename if provided
     if (name !== undefined) {
-      if (!name || !name.trim()) {
-        return res.status(400).json({ error: 'Column name cannot be empty.' });
+      if (typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ error: 'Column name cannot be empty and must be a string.' });
       }
       const trimmedName = name.trim();
       if (trimmedName.length > 50) {
         return res.status(400).json({ error: 'Column name cannot exceed 50 characters.' });
       }
 
-      db.prepare('UPDATE columns SET name = ? WHERE id = ?').run(trimmedName, columnId);
+      const renameTx = db.transaction(() => {
+        db.prepare('UPDATE columns SET name = ? WHERE id = ?').run(trimmedName, columnId);
 
-      // Log activity
-      db.prepare('INSERT INTO activity_log (board_id, user_id, action) VALUES (?, ?, ?)').run(
-        column.board_id,
-        req.user.id,
-        `renamed column to "${trimmedName}"`
-      );
+        // Log activity
+        db.prepare('INSERT INTO activity_log (board_id, user_id, action) VALUES (?, ?, ?)').run(
+          column.board_id,
+          req.user.id,
+          `renamed column to "${trimmedName}"`
+        );
+      });
+      renameTx();
     }
 
     const updated = db.prepare('SELECT id, board_id, name, position FROM columns WHERE id = ?').get(columnId);
     return res.status(200).json({ message: 'Column updated successfully.', column: updated });
   } catch (err) {
-    console.error('Error updating column:', err);
+    console.error('Error updating column:', err.message || err);
     return res.status(500).json({ error: 'Failed to update column.' });
   }
 });
@@ -92,20 +102,22 @@ router.put('/:id', (req, res) => {
 // PATCH /api/columns/:id/move - Dedicated endpoint for column reordering
 router.patch('/:id/move', (req, res) => {
   try {
-    const columnId = parseInt(req.params.id, 10);
-    if (!columnId || isNaN(columnId)) {
-      return res.status(400).json({ error: 'A valid Column ID is required.' });
+    if (!isPositiveInteger(req.params.id)) {
+      return res.status(400).json({ error: 'A valid positive Column ID is required.' });
+    }
+
+    const columnId = parsePositiveInteger(req.params.id);
+
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body.' });
     }
 
     const { position } = req.body;
-    if (position === undefined || position === null) {
-      return res.status(400).json({ error: 'Target position is required.' });
-    }
-
-    const targetPos = parseInt(position, 10);
-    if (isNaN(targetPos) || targetPos < 0) {
+    if (position === undefined || position === null || !isNonNegativeInteger(position)) {
       return res.status(400).json({ error: 'Position must be a non-negative integer.' });
     }
+
+    const targetPos = parseNonNegativeInteger(position);
 
     const { column, membership, error, status } = getColumnAndVerifyMembership(columnId, req.user.id);
     if (error) {
@@ -137,7 +149,7 @@ router.patch('/:id/move', (req, res) => {
       column: updated
     });
   } catch (err) {
-    console.error('Error reordering column:', err);
+    console.error('Error reordering column:', err.message || err);
     return res.status(500).json({ error: 'Failed to reorder column.' });
   }
 });
@@ -147,11 +159,11 @@ router.patch('/:id/move', (req, res) => {
 // Policy: If column contains tasks, require explicit force=true confirmation; then cascade-delete tasks in transaction
 router.delete('/:id', (req, res) => {
   try {
-    const columnId = parseInt(req.params.id, 10);
-    if (!columnId || isNaN(columnId)) {
-      return res.status(400).json({ error: 'A valid Column ID is required.' });
+    if (!isPositiveInteger(req.params.id)) {
+      return res.status(400).json({ error: 'A valid positive Column ID is required.' });
     }
 
+    const columnId = parsePositiveInteger(req.params.id);
     const force = req.query.force === 'true';
 
     const { column, membership, error, status } = getColumnAndVerifyMembership(columnId, req.user.id);
@@ -176,7 +188,7 @@ router.delete('/:id', (req, res) => {
       });
     }
 
-    // Execute deletion and re-index remaining columns
+    // Execute deletion and re-index remaining columns in an atomic transaction
     const deleteTx = db.transaction(() => {
       db.prepare('DELETE FROM columns WHERE id = ?').run(columnId);
 
@@ -199,7 +211,7 @@ router.delete('/:id', (req, res) => {
 
     return res.status(200).json({ message: 'Column deleted successfully.' });
   } catch (err) {
-    console.error('Error deleting column:', err);
+    console.error('Error deleting column:', err.message || err);
     return res.status(500).json({ error: 'Failed to delete column.' });
   }
 });

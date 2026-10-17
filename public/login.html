@@ -45,15 +45,15 @@
     <div class="demo-accounts-box">
       <div class="demo-title">⚡ Quick Development Login (Viva Demo)</div>
       <div class="demo-buttons-group">
-        <button type="button" class="demo-user-btn" onclick="fillDemo('alex@taskboard.local', 'password123')">
+        <button type="button" class="demo-user-btn" data-demo-email="alex@taskboard.local" data-demo-password="password123">
           <span><strong>Alex Morgan</strong> (alex@taskboard.local)</span>
           <span style="color: var(--primary); font-size: 10px;">Lead / Owner</span>
         </button>
-        <button type="button" class="demo-user-btn" onclick="fillDemo('sam@taskboard.local', 'password123')">
+        <button type="button" class="demo-user-btn" data-demo-email="sam@taskboard.local" data-demo-password="password123">
           <span><strong>Sam Taylor</strong> (sam@taskboard.local)</span>
           <span style="color: var(--success); font-size: 10px;">Engineer</span>
         </button>
-        <button type="button" class="demo-user-btn" onclick="fillDemo('jordan@taskboard.local', 'password123')">
+        <button type="button" class="demo-user-btn" data-demo-email="jordan@taskboard.local" data-demo-password="password123">
           <span><strong>Jordan Lee</strong> (jordan@taskboard.local)</span>
           <span style="color: var(--warning); font-size: 10px;">UI/UX</span>
         </button>
@@ -67,57 +67,6 @@
 
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
-  <script>
-    // Redirect if already logged in
-    Auth.requireGuest();
-
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('expired')) {
-      const alertBox = document.getElementById('auth-alert');
-      alertBox.textContent = 'Your session has expired. Please log in again.';
-      alertBox.style.display = 'block';
-    }
-
-    function fillDemo(email, pass) {
-      document.getElementById('email').value = email;
-      document.getElementById('password').value = pass;
-    }
-
-    const form = document.getElementById('login-form');
-    const submitBtn = document.getElementById('submit-btn');
-    const btnText = document.getElementById('btn-text');
-    const alertBox = document.getElementById('auth-alert');
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      alertBox.style.display = 'none';
-
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-
-      if (!email || !password) {
-        alertBox.textContent = 'Please provide both email and password.';
-        alertBox.style.display = 'block';
-        return;
-      }
-
-      submitBtn.disabled = true;
-      btnText.textContent = 'Signing in...';
-
-      try {
-        const data = await API.post('/api/auth/login', { email, password });
-        Auth.setAuth(data.token, data.user);
-        showToast('Login successful! Welcome back.', 'success');
-        setTimeout(() => {
-          window.location.href = 'dashboard.html';
-        }, 400);
-      } catch (err) {
-        alertBox.textContent = err.message || 'Login failed. Please check your credentials.';
-        alertBox.style.display = 'block';
-        submitBtn.disabled = false;
-        btnText.textContent = 'Sign In';
-      }
-    });
-  </script>
+  <script src="js/login.js"></script>
 </body>
 </html>

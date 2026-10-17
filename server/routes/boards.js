@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken, requireBoardMember, requireBoardOwner } = require('../middleware/auth');
+const { isPositiveInteger, parsePositiveInteger, isValidEmail, isValidPriority } = require('../utils/validation');
 
 // All board routes require authentication
 router.use(authenticateToken);
@@ -31,7 +32,7 @@ router.get('/', (req, res) => {
 
     return res.status(200).json({ boards });
   } catch (err) {
-    console.error('Error fetching boards:', err);
+    console.error('Error fetching boards:', err.message || err);
     return res.status(500).json({ error: 'Failed to retrieve boards.' });
   }
 });
@@ -39,15 +40,33 @@ router.get('/', (req, res) => {
 // POST /api/boards - Create a new board with default columns
 router.post('/', (req, res) => {
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body.' });
+    }
+
     const { name, description } = req.body;
     const userId = req.user.id;
 
-    if (!name || !name.trim()) {
-      return res.status(400).json({ error: 'Board name is required.' });
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Board name is required and must be a string.' });
     }
 
     const trimmedName = name.trim();
-    const trimmedDesc = description ? description.trim() : null;
+    if (trimmedName.length > 80) {
+      return res.status(400).json({ error: 'Board name cannot exceed 80 characters.' });
+    }
+
+    let trimmedDesc = null;
+    if (description !== undefined && description !== null) {
+      if (typeof description !== 'string') {
+        return res.status(400).json({ error: 'Board description must be a string.' });
+      }
+      trimmedDesc = description.trim();
+      if (trimmedDesc.length > 1000) {
+        return res.status(400).json({ error: 'Board description cannot exceed 1000 characters.' });
+      }
+      if (trimmedDesc.length === 0) trimmedDesc = null;
+    }
 
     // Execute in transaction: board + owner membership + default columns + activity
     const createBoardTx = db.transaction(() => {
@@ -87,7 +106,7 @@ router.post('/', (req, res) => {
       board: createdBoard
     });
   } catch (err) {
-    console.error('Error creating board:', err);
+    console.error('Error creating board:', err.message || err);
     return res.status(500).json({ error: 'Failed to create board.' });
   }
 });
@@ -179,7 +198,7 @@ router.get('/:id', requireBoardMember, (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Error retrieving board details:', err);
+    console.error('Error retrieving board details:', err.message || err);
     return res.status(500).json({ error: 'Failed to retrieve board details.' });
   }
 });
@@ -188,28 +207,49 @@ router.get('/:id', requireBoardMember, (req, res) => {
 router.put('/:id', requireBoardMember, requireBoardOwner, (req, res) => {
   try {
     const boardId = req.boardId;
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body.' });
+    }
+
     const { name, description } = req.body;
 
-    if (!name || !name.trim()) {
-      return res.status(400).json({ error: 'Board name is required.' });
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Board name is required and must be a string.' });
     }
 
     const trimmedName = name.trim();
-    const trimmedDesc = description ? description.trim() : null;
+    if (trimmedName.length > 80) {
+      return res.status(400).json({ error: 'Board name cannot exceed 80 characters.' });
+    }
 
-    db.prepare('UPDATE boards SET name = ?, description = ? WHERE id = ?').run(trimmedName, trimmedDesc, boardId);
+    let trimmedDesc = null;
+    if (description !== undefined && description !== null) {
+      if (typeof description !== 'string') {
+        return res.status(400).json({ error: 'Board description must be a string.' });
+      }
+      trimmedDesc = description.trim();
+      if (trimmedDesc.length > 1000) {
+        return res.status(400).json({ error: 'Board description cannot exceed 1000 characters.' });
+      }
+      if (trimmedDesc.length === 0) trimmedDesc = null;
+    }
 
-    // Log activity
-    db.prepare('INSERT INTO activity_log (board_id, user_id, action) VALUES (?, ?, ?)').run(
-      boardId,
-      req.user.id,
-      `renamed board to "${trimmedName}"`
-    );
+    const updateTx = db.transaction(() => {
+      db.prepare('UPDATE boards SET name = ?, description = ? WHERE id = ?').run(trimmedName, trimmedDesc, boardId);
+
+      // Log activity
+      db.prepare('INSERT INTO activity_log (board_id, user_id, action) VALUES (?, ?, ?)').run(
+        boardId,
+        req.user.id,
+        `renamed board to "${trimmedName}"`
+      );
+    });
+    updateTx();
 
     const updated = db.prepare('SELECT id, name, description, owner_id, created_at FROM boards WHERE id = ?').get(boardId);
     return res.status(200).json({ message: 'Board updated successfully.', board: updated });
   } catch (err) {
-    console.error('Error updating board:', err);
+    console.error('Error updating board:', err.message || err);
     return res.status(500).json({ error: 'Failed to update board.' });
   }
 });
@@ -218,10 +258,13 @@ router.put('/:id', requireBoardMember, requireBoardOwner, (req, res) => {
 router.delete('/:id', requireBoardMember, requireBoardOwner, (req, res) => {
   try {
     const boardId = req.boardId;
-    db.prepare('DELETE FROM boards WHERE id = ?').run(boardId);
+    const deleteTx = db.transaction(() => {
+      db.prepare('DELETE FROM boards WHERE id = ?').run(boardId);
+    });
+    deleteTx();
     return res.status(200).json({ message: 'Board deleted successfully.' });
   } catch (err) {
-    console.error('Error deleting board:', err);
+    console.error('Error deleting board:', err.message || err);
     return res.status(500).json({ error: 'Failed to delete board.' });
   }
 });
@@ -230,10 +273,14 @@ router.delete('/:id', requireBoardMember, requireBoardOwner, (req, res) => {
 router.post('/:id/members', requireBoardMember, requireBoardOwner, (req, res) => {
   try {
     const boardId = req.boardId;
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body.' });
+    }
+
     const { email } = req.body;
 
-    if (!email || !email.trim()) {
-      return res.status(400).json({ error: 'User email is required.' });
+    if (typeof email !== 'string' || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'A valid user email address is required.' });
     }
 
     const trimmedEmail = email.trim().toLowerCase();
@@ -250,15 +297,16 @@ router.post('/:id/members', requireBoardMember, requireBoardOwner, (req, res) =>
       return res.status(400).json({ error: `${userToInvite.name} is already a member of this board.` });
     }
 
-    // Add member
-    db.prepare('INSERT INTO board_members (board_id, user_id, role) VALUES (?, ?, ?)').run(boardId, userToInvite.id, 'member');
-
-    // Log activity
-    db.prepare('INSERT INTO activity_log (board_id, user_id, action) VALUES (?, ?, ?)').run(
-      boardId,
-      req.user.id,
-      `added ${userToInvite.name} to the board`
-    );
+    // Add member in transaction with activity log
+    const addMemberTx = db.transaction(() => {
+      db.prepare('INSERT INTO board_members (board_id, user_id, role) VALUES (?, ?, ?)').run(boardId, userToInvite.id, 'member');
+      db.prepare('INSERT INTO activity_log (board_id, user_id, action) VALUES (?, ?, ?)').run(
+        boardId,
+        req.user.id,
+        `added ${userToInvite.name} to the board`
+      );
+    });
+    addMemberTx();
 
     return res.status(201).json({
       message: `${userToInvite.name} added to the board successfully.`,
@@ -270,7 +318,7 @@ router.post('/:id/members', requireBoardMember, requireBoardOwner, (req, res) =>
       }
     });
   } catch (err) {
-    console.error('Error adding member:', err);
+    console.error('Error adding member:', err.message || err);
     return res.status(500).json({ error: 'Failed to add member to board.' });
   }
 });
@@ -279,7 +327,13 @@ router.post('/:id/members', requireBoardMember, requireBoardOwner, (req, res) =>
 router.delete('/:id/members/:userId', requireBoardMember, requireBoardOwner, (req, res) => {
   try {
     const boardId = req.boardId;
-    const targetUserId = Number(req.params.userId);
+    const rawUserId = req.params.userId;
+
+    if (!isPositiveInteger(rawUserId)) {
+      return res.status(400).json({ error: 'A valid positive User ID is required.' });
+    }
+
+    const targetUserId = parsePositiveInteger(rawUserId);
 
     if (targetUserId === req.user.id) {
       return res.status(400).json({ error: 'As board owner, you cannot remove yourself from your board.' });
@@ -295,7 +349,7 @@ router.delete('/:id/members/:userId', requireBoardMember, requireBoardOwner, (re
       return res.status(404).json({ error: 'User is not a member of this board.' });
     }
 
-    // Transaction: delete membership + unassign tasks
+    // Transaction: delete membership + unassign tasks + log activity
     const removeMemberTx = db.transaction(() => {
       db.prepare('DELETE FROM board_members WHERE board_id = ? AND user_id = ?').run(boardId, targetUserId);
       db.prepare('UPDATE tasks SET assignee_id = NULL WHERE board_id = ? AND assignee_id = ?').run(boardId, targetUserId);
@@ -310,7 +364,7 @@ router.delete('/:id/members/:userId', requireBoardMember, requireBoardOwner, (re
 
     return res.status(200).json({ message: `${targetUser.name} removed from the board.` });
   } catch (err) {
-    console.error('Error removing member:', err);
+    console.error('Error removing member:', err.message || err);
     return res.status(500).json({ error: 'Failed to remove member.' });
   }
 });
@@ -319,45 +373,59 @@ router.delete('/:id/members/:userId', requireBoardMember, requireBoardOwner, (re
 router.post('/:id/columns', requireBoardMember, (req, res) => {
   try {
     const boardId = req.boardId;
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body.' });
+    }
+
     const { name } = req.body;
 
-    if (!name || !name.trim()) {
-      return res.status(400).json({ error: 'Column name is required.' });
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Column name is required and must be a string.' });
     }
 
     const trimmedName = name.trim();
+    if (trimmedName.length > 50) {
+      return res.status(400).json({ error: 'Column name cannot exceed 50 characters.' });
+    }
 
-    // Calculate next position
-    const maxPosRow = db.prepare('SELECT MAX(position) AS max_pos FROM columns WHERE board_id = ?').get(boardId);
-    const nextPos = (maxPosRow && maxPosRow.max_pos !== null) ? maxPosRow.max_pos + 1 : 0;
+    let newColId;
+    const addColumnTx = db.transaction(() => {
+      // Calculate next position
+      const maxPosRow = db.prepare('SELECT MAX(position) AS max_pos FROM columns WHERE board_id = ?').get(boardId);
+      const nextPos = (maxPosRow && maxPosRow.max_pos !== null) ? maxPosRow.max_pos + 1 : 0;
 
-    const info = db.prepare('INSERT INTO columns (board_id, name, position) VALUES (?, ?, ?)').run(
-      boardId,
-      trimmedName,
-      nextPos
-    );
+      const info = db.prepare('INSERT INTO columns (board_id, name, position) VALUES (?, ?, ?)').run(
+        boardId,
+        trimmedName,
+        nextPos
+      );
+      newColId = Number(info.lastInsertRowid);
+
+      // Log activity
+      db.prepare('INSERT INTO activity_log (board_id, user_id, action) VALUES (?, ?, ?)').run(
+        boardId,
+        req.user.id,
+        `added column "${trimmedName}"`
+      );
+      return nextPos;
+    });
+
+    const nextPos = addColumnTx();
 
     const newColumn = {
-      id: Number(info.lastInsertRowid),
+      id: newColId,
       board_id: boardId,
       name: trimmedName,
       position: nextPos,
       tasks: []
     };
 
-    // Log activity
-    db.prepare('INSERT INTO activity_log (board_id, user_id, action) VALUES (?, ?, ?)').run(
-      boardId,
-      req.user.id,
-      `added column "${trimmedName}"`
-    );
-
     return res.status(201).json({
       message: 'Column created successfully.',
       column: newColumn
     });
   } catch (err) {
-    console.error('Error creating column:', err);
+    console.error('Error creating column:', err.message || err);
     return res.status(500).json({ error: 'Failed to create column.' });
   }
 });
@@ -394,25 +462,42 @@ router.get('/:id/tasks', requireBoardMember, (req, res) => {
 
     const params = [boardId];
 
-    if (q && q.trim()) {
-      sql += ' AND (t.title LIKE ? OR t.description LIKE ?)';
-      params.push(`%${q.trim()}%`, `%${q.trim()}%`);
+    if (q !== undefined) {
+      if (typeof q !== 'string') {
+        return res.status(400).json({ error: 'Query parameter q must be a string.' });
+      }
+      const trimmedQ = q.trim();
+      if (trimmedQ.length > 100) {
+        return res.status(400).json({ error: 'Search query cannot exceed 100 characters.' });
+      }
+      if (trimmedQ) {
+        sql += ' AND (t.title LIKE ? OR t.description LIKE ?)';
+        params.push(`%${trimmedQ}%`, `%${trimmedQ}%`);
+      }
     }
 
-    if (priority && priority !== 'all') {
+    if (priority !== undefined && priority !== 'all') {
+      if (!isValidPriority(priority)) {
+        return res.status(400).json({ error: "Invalid priority filter. Must be 'all', 'low', 'medium', or 'high'." });
+      }
       sql += ' AND t.priority = ?';
-      params.push(priority.toLowerCase());
+      params.push(String(priority).toLowerCase().trim());
     }
 
-    if (assignee) {
+    if (assignee !== undefined && assignee !== 'all') {
+      if (typeof assignee !== 'string') {
+        return res.status(400).json({ error: 'Invalid assignee filter.' });
+      }
       if (assignee === 'me') {
         sql += ' AND t.assignee_id = ?';
         params.push(req.user.id);
       } else if (assignee === 'unassigned') {
         sql += ' AND t.assignee_id IS NULL';
-      } else if (!isNaN(Number(assignee))) {
+      } else if (isPositiveInteger(assignee)) {
         sql += ' AND t.assignee_id = ?';
-        params.push(Number(assignee));
+        params.push(parsePositiveInteger(assignee));
+      } else {
+        return res.status(400).json({ error: 'Invalid assignee filter value.' });
       }
     }
 
@@ -421,7 +506,7 @@ router.get('/:id/tasks', requireBoardMember, (req, res) => {
     const tasks = db.prepare(sql).all(...params);
     return res.status(200).json({ tasks });
   } catch (err) {
-    console.error('Error filtering tasks:', err);
+    console.error('Error filtering tasks:', err.message || err);
     return res.status(500).json({ error: 'Failed to filter tasks.' });
   }
 });
@@ -446,7 +531,7 @@ router.get('/:id/activity', requireBoardMember, (req, res) => {
 
     return res.status(200).json({ activities });
   } catch (err) {
-    console.error('Error retrieving activity log:', err);
+    console.error('Error retrieving activity log:', err.message || err);
     return res.status(500).json({ error: 'Failed to retrieve activity log.' });
   }
 });

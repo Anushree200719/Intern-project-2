@@ -23,4 +23,6 @@ if (fs.existsSync(schemaPath)) {
   db.exec(schemaSql);
 }
 
+db.dbPath = dbPath;
+
 module.exports = db;

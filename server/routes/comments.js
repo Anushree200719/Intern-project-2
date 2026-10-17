@@ -2,21 +2,27 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const { isPositiveInteger, parsePositiveInteger } = require('../utils/validation');
 
 router.use(authenticateToken);
 
 // POST /api/tasks/:taskId/comments - Add comment to task
 router.post('/task/:taskId', (req, res) => {
   try {
-    const taskId = parseInt(req.params.taskId, 10);
-    if (!taskId || isNaN(taskId)) {
-      return res.status(400).json({ error: 'A valid Task ID is required.' });
+    if (!isPositiveInteger(req.params.taskId)) {
+      return res.status(400).json({ error: 'A valid positive Task ID is required.' });
+    }
+
+    const taskId = parsePositiveInteger(req.params.taskId);
+
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request body.' });
     }
 
     const { content } = req.body;
 
-    if (!content || !content.trim()) {
-      return res.status(400).json({ error: 'Comment content cannot be empty.' });
+    if (typeof content !== 'string' || !content.trim()) {
+      return res.status(400).json({ error: 'Comment content cannot be empty and must be a string.' });
     }
 
     const trimmedContent = content.trim();
@@ -72,7 +78,7 @@ router.post('/task/:taskId', (req, res) => {
       comment: createdComment
     });
   } catch (err) {
-    console.error('Error adding comment:', err);
+    console.error('Error adding comment:', err.message || err);
     return res.status(500).json({ error: 'Failed to add comment.' });
   }
 });
@@ -80,10 +86,11 @@ router.post('/task/:taskId', (req, res) => {
 // DELETE /api/comments/:id - Delete comment (author only)
 router.delete('/:id', (req, res) => {
   try {
-    const commentId = parseInt(req.params.id, 10);
-    if (!commentId || isNaN(commentId)) {
-      return res.status(400).json({ error: 'A valid Comment ID is required.' });
+    if (!isPositiveInteger(req.params.id)) {
+      return res.status(400).json({ error: 'A valid positive Comment ID is required.' });
     }
+
+    const commentId = parsePositiveInteger(req.params.id);
 
     const comment = db.prepare('SELECT id, task_id, user_id FROM comments WHERE id = ?').get(commentId);
     if (!comment) {
@@ -95,11 +102,15 @@ router.delete('/:id', (req, res) => {
       return res.status(403).json({ error: 'Permission denied. You can only delete your own comments.' });
     }
 
-    db.prepare('DELETE FROM comments WHERE id = ?').run(commentId);
+    const deleteCommentTx = db.transaction(() => {
+      db.prepare('DELETE FROM comments WHERE id = ?').run(commentId);
+    });
+
+    deleteCommentTx();
 
     return res.status(200).json({ message: 'Comment deleted successfully.' });
   } catch (err) {
-    console.error('Error deleting comment:', err);
+    console.error('Error deleting comment:', err.message || err);
     return res.status(500).json({ error: 'Failed to delete comment.' });
   }
 });

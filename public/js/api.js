@@ -121,6 +121,12 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-window.API = API;
-window.showToast = showToast;
-window.escapeHtml = escapeHtml;
+if (typeof window !== 'undefined') {
+  window.API = API;
+  window.showToast = showToast;
+  window.escapeHtml = escapeHtml;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { API, showToast, escapeHtml };
+}
